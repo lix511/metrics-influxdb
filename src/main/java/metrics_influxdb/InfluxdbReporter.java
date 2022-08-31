@@ -24,10 +24,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.ScheduledReporter;
 
 import metrics_influxdb.api.measurements.MetricMeasurementTransformer;
-import metrics_influxdb.measurements.HttpInlinerSender;
-import metrics_influxdb.measurements.MeasurementReporter;
-import metrics_influxdb.measurements.Sender;
-import metrics_influxdb.measurements.UdpInlinerSender;
+import metrics_influxdb.measurements.*;
 import metrics_influxdb.misc.HttpDatabaseCreator;
 import metrics_influxdb.misc.Miscellaneous;
 import metrics_influxdb.misc.VisibilityIncreasedForTests;
@@ -45,7 +42,7 @@ import metrics_influxdb.v08.ReporterV08;
 public class InfluxdbReporter  {
 
 	static enum InfluxdbCompatibilityVersions {
-		V08, LATEST;
+		V08, V1_LATEST, V2, V2_LATEST, LATEST;
 	}
 
 	/**
@@ -90,7 +87,7 @@ public class InfluxdbReporter  {
 			this.durationUnit = TimeUnit.MILLISECONDS;
 			this.filter = MetricFilter.ALL;
 			this.protocol = new HttpInfluxdbProtocol();
-			this.influxdbVersion = InfluxdbCompatibilityVersions.LATEST;
+			this.influxdbVersion = InfluxdbCompatibilityVersions.V1_LATEST;
 			this.tags = new HashMap<>();
 			this.autoCreateDB=true;
 		}
@@ -194,12 +191,18 @@ public class InfluxdbReporter  {
 						: new ReporterV08(registry, influxdb, clock, prefix, rateUnit, durationUnit, filter, skipIdleMetrics, executor)
 						;
 				break;
-			default:
-				Sender s = buildSender();
+      default:
+        Sender s;
+        if (influxdbVersion == InfluxdbCompatibilityVersions.V1_LATEST) {
+            s = buildSender();
+        } else {
+            s = buildSender2();
+        }
 				reporter = executor == null
 						? new MeasurementReporter(s, registry, filter, rateUnit, durationUnit, clock, tags, transformer)
 						: new MeasurementReporter(s, registry, filter, rateUnit, durationUnit, clock, tags, transformer, executor)
 						;
+
 			}
 			return reporter;
 		}
@@ -212,6 +215,11 @@ public class InfluxdbReporter  {
 			this.influxdbVersion  = InfluxdbCompatibilityVersions.V08;
 			return this;
 		}
+
+		public Builder v2() {
+		    this.influxdbVersion = InfluxdbCompatibilityVersions.V2;
+		    return this;
+    }
 
 		/**
 		 * Override the protocol to use.
@@ -282,5 +290,24 @@ public class InfluxdbReporter  {
 			}
 
 		}
+
+      private Sender buildSender2() {
+          if (protocol instanceof HttpInfluxdbProtocol2) {
+              HttpInfluxdbProtocol2 httpInfluxdbProtocol2 = (HttpInfluxdbProtocol2) this.protocol;
+
+              //todo support autoCreateDB
+//              if (this.autoCreateDB ) {
+//                  HttpDatabaseCreator.run(httpInfluxdbProtocol2);
+//              }
+              return new HttpInlinerSender2(httpInfluxdbProtocol2);
+              // TODO allow registration of transformers
+              // TODO evaluate need of prefix (vs tags)
+          } else if (protocol instanceof UdpInfluxdbProtocol) {
+              return new UdpInlinerSender((UdpInfluxdbProtocol) protocol);
+          } else {
+              throw new IllegalStateException("unsupported protocol: " + protocol);
+          }
+
+      }
 	}
 }

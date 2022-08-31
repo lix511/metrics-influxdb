@@ -43,7 +43,7 @@ public class InfluxdbReporterBuilderTest {
 		assertFalse(httpProtocol.secured);
 
 		// other defaults
-		assertThat(builder.influxdbVersion, is(InfluxdbReporter.InfluxdbCompatibilityVersions.LATEST));
+		assertThat(builder.influxdbVersion, is(InfluxdbReporter.InfluxdbCompatibilityVersions.V1_LATEST));
 		assertThat(builder.transformer, is(MetricMeasurementTransformer.NOOP));
 	}
 
